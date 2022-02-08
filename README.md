@@ -27,7 +27,7 @@ func main() {
 	db, _ := badger.Open(badger.DefaultOptions("").WithInMemory(true))
 	bufferDuration := 1 * time.Second
 
-	buffcomp, _ := buffercompact.New(db, sortedset, bufferDuration, buffercompact.WithMaxValues(5))
+	buffcomp, _ := buffercompact.New(db, sortedset, bufferDuration, buffercompact.WithMaxValueCount(5))
 
 	buffcomp.StoreToQueue("test1", []byte("testValue1"))
 	buffcomp.StoreToQueue("test1", []byte("testValue2"))
