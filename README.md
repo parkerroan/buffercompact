@@ -1,8 +1,10 @@
 # Buffer Compactor Lib
 
-Buffer Compactor is a tool to allow for buffering for a duration and compacting data on keys. It uses a badgerDB and sortedset in order to coridinate a time-delayed queue that also aggregates updates sharing the same key. 
+Buffer Compactor is a tool to allow for buffering for a duration and compacting data on keys. It uses a badgerDB and sortedset in order to coridinate a time-delayed queue that also aggregates updates sharing the same key in a extremely peformant manner. 
 
-BufferCompactor is thread safe and can shared by consumer and producer threads to delay kafka topics or other message like workloads. 
+BufferCompactor is thread safe and be can shared by consumer and producer threads to delay kafka topics or other message like workloads.
+
+BadgerDB can be configured to live completely on RAM or on Disk depending on workloads. 
 
 ## Example Usage: 
 
