@@ -63,14 +63,13 @@ func Test_MaxValuesCount(t *testing.T) {
 
 	buffcomp.StoreToQueue("test1", []byte("testValue1"))
 	buffcomp.StoreToQueue("test2", []byte("testValue2"))
-	buffcomp.StoreToQueue("test3", []byte("testValue3"))
-	buffcomp.StoreToQueue("test4", []byte("testValue4"))
-	buffcomp.StoreToQueue("test5", []byte("testValue5"))
+	err = buffcomp.StoreToQueue("test3", []byte("testValue3"))
+	assert.EqualError(t, err, ErrMaxValueCount.Error())
 
 	//No Wait but MaxValue empties memory db values
 	items, err := buffcomp.RetreiveFromQueue(10)
 	assert.Nil(t, err)
-	assert.Len(t, items, 5)
+	assert.Len(t, items, 2)
 
 	assert.Equal(t, "test1", string(items[0].Key))
 	assert.Equal(t, "testValue1", string(items[0].Value))

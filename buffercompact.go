@@ -50,7 +50,7 @@ func WithMaxValueCount(maxLength int) BufferCompactorOption {
 }
 
 func (b *BufferCompactor) StoreToQueue(key string, value []byte) error {
-	if b.maxValuesCount != 0 && b.sortedSet.GetCount() > b.maxValuesCount {
+	if b.maxValuesCount != 0 && b.sortedSet.GetCount() >= b.maxValuesCount {
 		return ErrMaxValueCount
 	}
 
@@ -76,7 +76,7 @@ func (b *BufferCompactor) RetreiveFromQueue(limit int) ([]*StorageItem, error) {
 	b.mu.Lock()
 	//if max set length is hit, aggressively remove items disregarding
 	//buffer duration
-	if b.maxValuesCount != 0 && b.sortedSet.GetCount() > b.maxValuesCount {
+	if b.maxValuesCount != 0 && b.sortedSet.GetCount() >= b.maxValuesCount {
 		nodes = b.sortedSet.GetByRankRange(1, limit, true)
 	} else {
 		end := sortedset.SCORE(time.Now().Unix())
