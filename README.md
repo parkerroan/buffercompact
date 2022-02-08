@@ -6,20 +6,7 @@ BufferCompactor is thread safe and can shared by consumer and producer threads t
 
 ## Example Usage: 
 
-### Inserting Data:
-Not handling errors to save space in example
-```
-
-    sortedset := sortedset.New()
-    db, _ := badger.Open(badger.DefaultOptions("").WithInMemory(true))
-    bufferDuration := 1 * time.Second
-
-    buffcomp, _ := New(db, sortedset, bufferDuration)
-
-    buffcomp.StoreToQueue("test1", []byte("testValue1"))
-```
-
-### Retrieving Data:
+### Getting Started:
 Not handling errors to save space in example
 ```
 
