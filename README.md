@@ -54,6 +54,6 @@ func main() {
 
 ```
 
-```go
-# github.com/parkerroan/bufffercompact/examples/getting_started.go
+```go:examples/getting_started.go
+
 ```
