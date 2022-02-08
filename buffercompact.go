@@ -1,11 +1,16 @@
 package buffercompact
 
 import (
+	"errors"
 	"sync"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
 	"github.com/parkerroan/buffercompact/sortedset"
+)
+
+var (
+	ErrMaxValueCount = errors.New("max value count reached")
 )
 
 type BufferCompactor struct {
@@ -45,6 +50,9 @@ func WithMaxValueCount(maxLength int) BufferCompactorOption {
 }
 
 func (b *BufferCompactor) StoreToQueue(key string, value []byte) error {
+	if b.maxValuesCount != 0 && b.sortedSet.GetCount() > b.maxValuesCount {
+		return ErrMaxValueCount
+	}
 
 	err := b.db.Update(func(txn *badger.Txn) error {
 		err := txn.Set([]byte(key), value)
