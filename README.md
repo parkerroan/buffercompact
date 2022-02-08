@@ -52,5 +52,7 @@ func main() {
 	fmt.Printf("All Results Returned Due To Max Values Limit (Ignored Buffer Duration): %v \n", items)
 }
 
+```
 
+```go:examples:getting_started.go
 ```
