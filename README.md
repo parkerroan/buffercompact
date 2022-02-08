@@ -32,12 +32,13 @@ func main() {
 	buffcomp.StoreToQueue("test1", []byte("testValue1"))
 	buffcomp.StoreToQueue("test1", []byte("testValue2"))
 
-	items, _ := buffcomp.RetreiveFromQueue(10)
+	limit := 10
+	items, _ := buffcomp.RetreiveFromQueue(limit)
 	fmt.Printf("No Results: %v \n", items)
 
 	time.Sleep(1 * time.Second)
 
-	items, _ = buffcomp.RetreiveFromQueue(10)
+	items, _ = buffcomp.RetreiveFromQueue(limit)
 	fmt.Printf("Results After Buffer Duration: %v \n", items)
 
 	//Insert More Records Up To Max
@@ -48,8 +49,9 @@ func main() {
 	buffcomp.StoreToQueue("test5", []byte("testValue5"))
 	buffcomp.StoreToQueue("test6", []byte("testValue6"))
 
-	items, _ = buffcomp.RetreiveFromQueue(10)
+	items, _ = buffcomp.RetreiveFromQueue(limit)
 	fmt.Printf("All Results Returned Due To Max Values Limit (Ignored Buffer Duration): %v \n", items)
 }
+
 ```
 
