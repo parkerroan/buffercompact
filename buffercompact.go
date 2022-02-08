@@ -127,7 +127,7 @@ func (b *BufferCompactor) StoreToQueue(item StorageItem) error {
 
 			dupeEntry := badger.NewEntry(dedupeKey, []byte(item.UniqueID))
 			if b.dedupeDuration != nil {
-				dupeEntry.WithTTL(*b.ttlDuration)
+				dupeEntry.WithTTL(*b.dedupeDuration)
 			}
 			if err := txn.SetEntry(dupeEntry); err != nil {
 				return err
