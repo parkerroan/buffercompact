@@ -43,10 +43,8 @@ func Test_NormalUsageCase(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Len(t, items, 2)
 
-	assert.Equal(t, "test1", string(items[0].Key))
-	assert.Equal(t, "testValue2", string(items[0].Value))
-	assert.Equal(t, "test2", string(items[1].Key))
-	assert.Equal(t, "testValue3", string(items[1].Value))
+	assert.Equal(t, StorageItem{Key: "test1", Value: []byte("testValue2")}, StorageItem{Key: items[0].Key, Value: items[0].Value})
+	assert.Equal(t, StorageItem{Key: "test3", Value: []byte("testValue3")}, StorageItem{Key: items[1].Key, Value: items[1].Value})
 }
 
 func Test_MaxValuesCountCase(t *testing.T) {
@@ -68,8 +66,8 @@ func Test_MaxValuesCountCase(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Len(t, items, 2)
 
-	assert.Equal(t, StorageItem{Key: "test1", Value: []byte("testValue1")}, items[0])
-	assert.Equal(t, StorageItem{Key: "test2", Value: []byte("testValue2")}, items[1])
+	assert.Equal(t, StorageItem{Key: "test1", Value: []byte("testValue1")}, StorageItem{Key: items[0].Key, Value: items[0].Value})
+	assert.Equal(t, StorageItem{Key: "test2", Value: []byte("testValue2")}, StorageItem{Key: items[1].Key, Value: items[1].Value})
 }
 
 func Test_PopulateSetFromDB(t *testing.T) {
@@ -114,7 +112,7 @@ func Test_StoreToQueue(test *testing.T) {
 			db, _ := badger.Open(badger.DefaultOptions("").WithInMemory(true))
 			bufferDuration := 5 * time.Second
 
-			buffcomp, err := New(db, bufferDuration)
+			buffcomp, err := New(db, bufferDuration, WithSortedSet(sortedset))
 			assert.Nil(t, err)
 
 			err = buffcomp.StoreToQueue(c.item)
@@ -131,8 +129,8 @@ func Test_StoreToQueue(test *testing.T) {
 
 					var dbValue []byte
 					dbValue, err = dbItem.ValueCopy(dbValue)
-
-					assert.Equal(t, c.item.Value, dbValue)
+					_, strippedValue := removeScoreBytes(dbValue)
+					assert.Equal(t, c.item.Value, strippedValue)
 					return err
 				}); err != nil {
 					t.Fatal("error in bagder txn")

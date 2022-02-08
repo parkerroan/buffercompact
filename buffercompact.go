@@ -86,6 +86,12 @@ func WithMaxValueCount(maxLength int) BufferCompactorOption {
 	}
 }
 
+func WithSortedSet(set *sortedset.SortedSet) BufferCompactorOption {
+	return func(b *BufferCompactor) {
+		b.sortedSet = set
+	}
+}
+
 func WithTTL(ttlDuration time.Duration) BufferCompactorOption {
 	return func(b *BufferCompactor) {
 		b.ttlDuration = &ttlDuration
