@@ -38,7 +38,7 @@ func New(db *badger.DB, sortedSet *sortedset.SortedSet, bufferDuration time.Dura
 	return &byffComp, nil
 }
 
-func WithMaxValues(maxLength int) BufferCompactorOption {
+func WithMaxValueCount(maxLength int) BufferCompactorOption {
 	return func(b *BufferCompactor) {
 		b.maxValuesCount = maxLength
 	}

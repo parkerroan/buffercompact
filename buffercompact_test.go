@@ -56,7 +56,7 @@ func Test_MaxValuesCount(t *testing.T) {
 	db, _ := badger.Open(badger.DefaultOptions("").WithInMemory(true))
 	bufferDuration := 1 * time.Second
 
-	buffcomp, err := New(db, sortedset, bufferDuration, WithMaxValues(2))
+	buffcomp, err := New(db, sortedset, bufferDuration, WithMaxValueCount(2))
 
 	assert.Nil(t, err)
 	assert.NotNil(t, buffcomp)
