@@ -12,15 +12,17 @@ type BufferCompactor struct {
 	sortedSet      *sortedset.SortedSet
 	bufferDuration time.Duration
 
-	maxSetLength *int
+	maxValuesCount int
 }
+
+type BufferCompactorOption func(*BufferCompactor)
 
 type StorageItem struct {
 	Key   string
 	Value []byte
 }
 
-func New(db *badger.DB, sortedSet *sortedset.SortedSet, bufferDuration time.Duration, opts ...func(*BufferCompactor)) (*BufferCompactor, error) {
+func New(db *badger.DB, sortedSet *sortedset.SortedSet, bufferDuration time.Duration, opts ...BufferCompactorOption) (*BufferCompactor, error) {
 	byffComp := BufferCompactor{
 		db:             db,
 		sortedSet:      sortedSet,
@@ -32,6 +34,12 @@ func New(db *badger.DB, sortedSet *sortedset.SortedSet, bufferDuration time.Dura
 	}
 
 	return &byffComp, nil
+}
+
+func WithMaxValues(maxLength int) BufferCompactorOption {
+	return func(b *BufferCompactor) {
+		b.maxValuesCount = maxLength
+	}
 }
 
 func (b *BufferCompactor) StoreToQueue(key string, value []byte) error {
@@ -56,7 +64,7 @@ func (b *BufferCompactor) RetreiveFromQueue(limit int) ([]*StorageItem, error) {
 
 	//if max set length is hit, aggressively remove items disregarding
 	//buffer duration
-	if b.maxSetLength != nil && b.sortedSet.GetCount() > *b.maxSetLength {
+	if b.maxValuesCount != 0 && b.sortedSet.GetCount() > b.maxValuesCount {
 		nodes = b.sortedSet.GetByRankRange(1, limit, true)
 	} else {
 		end := sortedset.SCORE(time.Now().Unix())

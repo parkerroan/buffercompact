@@ -51,6 +51,33 @@ func Test_NormalUsage(t *testing.T) {
 	assert.Equal(t, "testValue3", string(items[1].Value))
 }
 
+func Test_MaxValuesCount(t *testing.T) {
+	sortedset := sortedset.New()
+	db, _ := badger.Open(badger.DefaultOptions("").WithInMemory(true))
+	bufferDuration := 1 * time.Second
+
+	buffcomp, err := New(db, sortedset, bufferDuration, WithMaxValues(2))
+
+	assert.Nil(t, err)
+	assert.NotNil(t, buffcomp)
+
+	buffcomp.StoreToQueue("test1", []byte("testValue1"))
+	buffcomp.StoreToQueue("test2", []byte("testValue2"))
+	buffcomp.StoreToQueue("test3", []byte("testValue3"))
+	buffcomp.StoreToQueue("test4", []byte("testValue4"))
+	buffcomp.StoreToQueue("test5", []byte("testValue5"))
+
+	//No Wait but MaxValue empties memory db values
+	items, err := buffcomp.RetreiveFromQueue(10)
+	assert.Nil(t, err)
+	assert.Len(t, items, 5)
+
+	assert.Equal(t, "test1", string(items[0].Key))
+	assert.Equal(t, "testValue1", string(items[0].Value))
+	assert.Equal(t, "test2", string(items[1].Key))
+	assert.Equal(t, "testValue2", string(items[1].Value))
+}
+
 func Test_StoreToQueue(test *testing.T) {
 	cases := map[string]struct {
 		item        StorageItem
