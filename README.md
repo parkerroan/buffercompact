@@ -54,5 +54,5 @@ func main() {
 
 ```
 
-```go:examples:getting_started.go
+```go:examples/getting_started.go
 ```
