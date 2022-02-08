@@ -11,6 +11,8 @@ type BufferCompactor struct {
 	db             *badger.DB
 	sortedSet      *sortedset.SortedSet
 	bufferDuration time.Duration
+
+	maxSetLength *int
 }
 
 type StorageItem struct {
@@ -50,11 +52,18 @@ func (b *BufferCompactor) StoreToQueue(key string, value []byte) error {
 }
 
 func (b *BufferCompactor) RetreiveFromQueue(limit int) ([]*StorageItem, error) {
+	var nodes []*sortedset.SortedSetNode
 
-	end := sortedset.SCORE(time.Now().Unix())
-	nodes := b.sortedSet.GetByScoreRange(-1, end, &sortedset.GetByScoreRangeOptions{
-		Limit:  limit,
-		Remove: true})
+	//if max set length is hit, aggressively remove items disregarding
+	//buffer duration
+	if b.maxSetLength != nil && b.sortedSet.GetCount() > *b.maxSetLength {
+		nodes = b.sortedSet.GetByRankRange(1, limit, true)
+	} else {
+		end := sortedset.SCORE(time.Now().Unix())
+		nodes = b.sortedSet.GetByScoreRange(-1, end, &sortedset.GetByScoreRangeOptions{
+			Limit:  limit,
+			Remove: true})
+	}
 
 	response := make([]*StorageItem, 0, len(nodes))
 
