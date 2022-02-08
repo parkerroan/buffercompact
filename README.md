@@ -1,4 +1,4 @@
-# Buffer Compactor Lib
+# Buffer Compact Lib
 
 Buffer Compactor is a tool to allow for buffering for a duration and compacting data on keys. It uses a badgerDB and sortedset in order to coridinate a time-delayed queue that also aggregates updates sharing the same key in a extremely peformant manner. 
 
