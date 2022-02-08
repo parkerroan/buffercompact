@@ -1,6 +1,7 @@
 package buffercompact
 
 import (
+	"sync"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
@@ -11,6 +12,7 @@ type BufferCompactor struct {
 	db             *badger.DB
 	sortedSet      *sortedset.SortedSet
 	bufferDuration time.Duration
+	mu             sync.Mutex
 
 	maxValuesCount int
 }
@@ -62,6 +64,8 @@ func (b *BufferCompactor) StoreToQueue(key string, value []byte) error {
 func (b *BufferCompactor) RetreiveFromQueue(limit int) ([]*StorageItem, error) {
 	var nodes []*sortedset.SortedSetNode
 
+	//lock here to allow for multiple caller threads
+	b.mu.Lock()
 	//if max set length is hit, aggressively remove items disregarding
 	//buffer duration
 	if b.maxValuesCount != 0 && b.sortedSet.GetCount() > b.maxValuesCount {
@@ -72,6 +76,7 @@ func (b *BufferCompactor) RetreiveFromQueue(limit int) ([]*StorageItem, error) {
 			Limit:  limit,
 			Remove: true})
 	}
+	b.mu.Unlock()
 
 	response := make([]*StorageItem, 0, len(nodes))
 
