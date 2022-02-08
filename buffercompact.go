@@ -1,11 +1,44 @@
+// Copyright (c) 2022, Parker.Roan
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// * Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//
+// * Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation
+//  and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 package buffercompact
 
 import (
+	"encoding/binary"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
 	"github.com/parkerroan/buffercompact/sortedset"
+)
+
+var (
+	ErrMaxValueCount = errors.New("max value count reached")
+	DedupeKeyPrefix  = "unique_value:%s"
+	KeyPrefix        = "compact_key:%s"
 )
 
 type BufferCompactor struct {
@@ -15,27 +48,36 @@ type BufferCompactor struct {
 	mu             sync.Mutex
 
 	maxValuesCount int
+	ttlDuration    *time.Duration
+	dedupeDuration *time.Duration
 }
 
 type BufferCompactorOption func(*BufferCompactor)
 
 type StorageItem struct {
-	Key   string
-	Value []byte
+	Key      string
+	Value    []byte
+	UniqueID string
+
+	score int64
 }
 
-func New(db *badger.DB, sortedSet *sortedset.SortedSet, bufferDuration time.Duration, opts ...BufferCompactorOption) (*BufferCompactor, error) {
-	byffComp := BufferCompactor{
+func New(db *badger.DB, bufferDuration time.Duration, opts ...BufferCompactorOption) (*BufferCompactor, error) {
+	buffComp := BufferCompactor{
 		db:             db,
-		sortedSet:      sortedSet,
+		sortedSet:      sortedset.New(),
 		bufferDuration: bufferDuration,
 	}
 
 	for _, opt := range opts {
-		opt(&byffComp)
+		opt(&buffComp)
 	}
 
-	return &byffComp, nil
+	if err := buffComp.PopulateSetFromDB(); err != nil {
+		return nil, err
+	}
+
+	return &buffComp, nil
 }
 
 func WithMaxValueCount(maxLength int) BufferCompactorOption {
@@ -44,31 +86,74 @@ func WithMaxValueCount(maxLength int) BufferCompactorOption {
 	}
 }
 
-func (b *BufferCompactor) StoreToQueue(key string, value []byte) error {
+func WithTTL(ttlDuration time.Duration) BufferCompactorOption {
+	return func(b *BufferCompactor) {
+		b.ttlDuration = &ttlDuration
+	}
+}
+
+func WithDedupeDuration(ttlDuration time.Duration) BufferCompactorOption {
+	return func(b *BufferCompactor) {
+		b.ttlDuration = &ttlDuration
+	}
+}
+
+func (b *BufferCompactor) StoreToQueue(item StorageItem) error {
+	if b.maxValuesCount != 0 && b.sortedSet.GetCount() >= b.maxValuesCount {
+		return ErrMaxValueCount
+	}
+
+	score := time.Now().Add(b.bufferDuration).Unix()
+	item.score = score
 
 	err := b.db.Update(func(txn *badger.Txn) error {
-		err := txn.Set([]byte(key), value)
+		//Dedupe Block
+		if item.UniqueID != "" {
+			dedupeKey := []byte(fmt.Sprintf(DedupeKeyPrefix, item.Key))
+			if existingItem, _ := txn.Get(dedupeKey); existingItem != nil {
+				var existingUniqueIDbytes []byte
+				existingUniqueIDbytes, _ = existingItem.ValueCopy(existingUniqueIDbytes)
+				if string(existingUniqueIDbytes) == item.UniqueID {
+					//value match skipping store for dedupe
+					return nil
+				}
+			}
+
+			dupeEntry := badger.NewEntry(dedupeKey, []byte(item.UniqueID))
+			if b.dedupeDuration != nil {
+				dupeEntry.WithTTL(*b.ttlDuration)
+			}
+			if err := txn.SetEntry(dupeEntry); err != nil {
+				return err
+			}
+		}
+
+		value := appendScoreBytes(item.Value, item.score)
+		entry := badger.NewEntry([]byte(item.Key), value)
+		if b.ttlDuration != nil {
+			entry.WithTTL(*b.ttlDuration)
+		}
+		err := txn.SetEntry(entry)
 		return err
 	})
 	if err != nil {
 		return err
 	}
 
-	if node := b.sortedSet.GetByKey(key); node == nil {
-		score := sortedset.SCORE(time.Now().Add(b.bufferDuration).Unix())
-		b.sortedSet.AddOrUpdate(key, score, struct{}{})
+	if node := b.sortedSet.GetByKey(item.Key); node == nil {
+		b.sortedSet.AddOrUpdate(item.Key, sortedset.SCORE(score), struct{}{})
 	}
 	return nil
 }
 
-func (b *BufferCompactor) RetreiveFromQueue(limit int) ([]*StorageItem, error) {
+func (b *BufferCompactor) RetrieveFromQueue(limit int) ([]*StorageItem, error) {
 	var nodes []*sortedset.SortedSetNode
 
 	//lock here to allow for multiple caller threads
 	b.mu.Lock()
 	//if max set length is hit, aggressively remove items disregarding
 	//buffer duration
-	if b.maxValuesCount != 0 && b.sortedSet.GetCount() > b.maxValuesCount {
+	if b.maxValuesCount != 0 && b.sortedSet.GetCount() >= b.maxValuesCount {
 		nodes = b.sortedSet.GetByRankRange(1, limit, true)
 	} else {
 		end := sortedset.SCORE(time.Now().Unix())
@@ -118,20 +203,18 @@ func (b *BufferCompactor) RemoveFromDB(key string) (*StorageItem, error) {
 		return nil, err
 	}
 
+	score, strippedValue := removeScoreBytes(value)
+
 	return &StorageItem{
 		Key:   key,
-		Value: value,
+		Value: strippedValue,
+		score: score,
 	}, nil
 }
 
-//RetrieveAllKeys is a helper that can be used on startup if using badger with persistant disk options.
-//On startup the SortedSet will be empty since it will not persist to the disk; if persiting badger, you may
-//    use this function to drive iteration in order to reseed the SortedSet OR
-//    process manually and pop them from the store using `RemoveFromDB`
-//
-//Note: This is a helper function and can be implemented on the badger db instance itself and is not pivotal to this library.
-func (b *BufferCompactor) RetrieveAllKeys() ([]string, error) {
-	var keys []string
+//PopulateSetFromDB allows for badgerDB persistance by loading all keys and score from db on startup
+//    into the sortedset.
+func (b *BufferCompactor) PopulateSetFromDB() error {
 	err := b.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 10
@@ -141,7 +224,10 @@ func (b *BufferCompactor) RetrieveAllKeys() ([]string, error) {
 			item := it.Item()
 			k := item.Key()
 			err := item.Value(func(v []byte) error {
-				keys = append(keys, string(k))
+				score, _ := removeScoreBytes(v)
+				if node := b.sortedSet.GetByKey(string(k)); node == nil {
+					b.sortedSet.AddOrUpdate(string(k), sortedset.SCORE(score), struct{}{})
+				}
 				return nil
 			})
 			if err != nil {
@@ -152,8 +238,25 @@ func (b *BufferCompactor) RetrieveAllKeys() ([]string, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return keys, nil
+	return nil
+}
+
+func appendScoreBytes(input []byte, score int64) []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(score))
+
+	final := append(input, b...)
+
+	return final
+}
+
+func removeScoreBytes(value []byte) (int64, []byte) {
+	scoreBytes := value[len(value)-8:]
+	value = value[:len(value)-8]
+	score := int64(binary.LittleEndian.Uint64(scoreBytes))
+
+	return score, value
 }
