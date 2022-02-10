@@ -43,7 +43,6 @@ import (
 var (
 	ErrMaxValueCount = errors.New("max value count reached")
 	DedupeKeyPrefix  = "unique_value:%s"
-	KeyPrefix        = "compact_key:%s"
 )
 
 type BufferCompactor struct {
